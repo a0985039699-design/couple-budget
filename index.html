@@ -142,7 +142,7 @@ input,select{font-family:inherit;font-size:15px;color:var(--text)}
 /* Scroll */
 .scroll{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;
   background:var(--bg);
-  padding:18px 16px calc(110px + var(--safe-b))}
+  padding:18px 16px calc(124px + var(--safe-b))}
 
 /* Tabs */
 .tab{display:none}.tab.on{display:block}
@@ -293,7 +293,7 @@ input,select{font-family:inherit;font-size:15px;color:var(--text)}
 /* Nav */
 .nav{background:var(--surface);border-top:1.5px solid var(--border);
   display:flex;flex-shrink:0;padding-top:6px;
-  padding-bottom:calc(14px + var(--safe-b));
+  padding-bottom:calc(22px + var(--safe-b));
   box-shadow:0 -2px 16px rgba(74,143,224,.09)}
 .nb{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;
   padding:10px 6px 8px;color:var(--text3);transition:color .15s;position:relative}
@@ -859,18 +859,21 @@ async function joinFamily(){
   const btn=document.querySelector('#joinCard .btn-main');
   btn.disabled=true; btn.textContent='加入中…';
   try{
-    const r=await supaFetch(`/rest/v1/families?invite_code=eq.${code}&select=id,invite_expires_at`);
-    const arr=await r.json();
-    if(!arr||arr.length===0){showToast('❌ 邀請碼不正確');return;}
-    const fam=arr[0];
-    if(new Date(fam.invite_expires_at)<new Date()){showToast('❌ 邀請碼已過期');return;}
-    const userId=getUserId();
-    const r2=await supaFetch('/rest/v1/family_members',{
+    // 使用 RPC 函數加入，繞過 RLS（未加入前無法讀取家庭資料）
+    const r=await supaFetch('/rest/v1/rpc/join_family_by_code',{
       method:'POST',
-      body:JSON.stringify({family_id:fam.id,user_id:userId})
+      body:JSON.stringify({p_invite_code:code})
     });
-    if(!r2.ok&&r2.status!==409) throw new Error(await r2.text());
-    familyId=fam.id; inviteCode=code;
+    if(!r.ok){
+      const err=await r.json();
+      const msg=err.message||'';
+      if(msg.includes('不正確')) showToast('❌ 邀請碼不正確');
+      else if(msg.includes('過期')) showToast('❌ 邀請碼已過期');
+      else showToast('❌ 加入失敗：'+msg);
+      return;
+    }
+    const fam=await r.json();
+    familyId=fam.id; inviteCode=fam.invite_code||code;
     localStorage.setItem('bgt_family',familyId);
     localStorage.setItem('bgt_code',inviteCode);
     showToast('✅ 成功加入家庭帳本！');
