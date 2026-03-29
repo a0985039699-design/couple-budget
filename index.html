@@ -627,6 +627,14 @@ document.getElementById('fDate').value=today.toISOString().split('T')[0];
 const apiHdr=(tok)=>({'Content-Type':'application/json','apikey':cfg.key,'Authorization':`Bearer ${tok}`});
 const supaFetch=(path,opts={})=>fetch(cfg.url+path,{...opts,headers:{...apiHdr(session.access_token),...(opts.headers||{})}});
 
+// ── 從 JWT 取得當前用戶 UUID ──
+function getUserId(){
+  try{
+    const payload=JSON.parse(atob(session.access_token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));
+    return payload.sub;
+  }catch{return null;}
+}
+
 // ── PKCE helpers ──
 function b64url(str){return btoa(str).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');}
 async function genVerifier(){
@@ -833,9 +841,10 @@ async function createFamily(){
     });
     if(!r1.ok) throw new Error(await r1.text());
     const fam=(await r1.json())[0];
+    const userId=getUserId();
     await supaFetch('/rest/v1/family_members',{
       method:'POST',
-      body:JSON.stringify({family_id:fam.id})
+      body:JSON.stringify({family_id:fam.id,user_id:userId})
     });
     familyId=fam.id; inviteCode=code;
     localStorage.setItem('bgt_family',familyId);
@@ -860,9 +869,10 @@ async function joinFamily(){
     if(!arr||arr.length===0){showToast('❌ 邀請碼不正確');return;}
     const fam=arr[0];
     if(new Date(fam.invite_expires_at)<new Date()){showToast('❌ 邀請碼已過期');return;}
+    const userId=getUserId();
     const r2=await supaFetch('/rest/v1/family_members',{
       method:'POST',
-      body:JSON.stringify({family_id:fam.id})
+      body:JSON.stringify({family_id:fam.id,user_id:userId})
     });
     if(!r2.ok&&r2.status!==409) throw new Error(await r2.text());
     familyId=fam.id; inviteCode=code;
