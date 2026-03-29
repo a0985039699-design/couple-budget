@@ -340,34 +340,8 @@ input,select{font-family:inherit;font-size:15px;color:var(--text)}
 </head>
 <body>
 
-<!-- ── STEP 1: Supabase 設定 ── -->
-<div class="screen on" id="cfgScreen">
-  <div class="screen-inner">
-    <div class="brand">
-      <span class="brand-icon">💑</span>
-      <div class="brand-title">我們的帳本</div>
-      <div class="brand-sub">錢錢的事，兩個人的事 💸</div>
-    </div>
-    <div class="card">
-      <div class="card-title">🔧 第一步：設定資料庫</div>
-      <div class="card-sub">只需設定一次，之後直接登入使用</div>
-      <div class="steps">
-        <div class="step"><div class="sn">1</div><div class="sb"><b>建立免費 Supabase 帳號</b><p>前往 <a href="https://supabase.com" target="_blank">supabase.com</a> 註冊，建立新專案</p></div></div>
-        <div class="step"><div class="sn">2</div><div class="sb"><b>執行 SQL 建表</b><p>進入 <code>SQL Editor</code>，複製下方 SQL 執行</p></div></div>
-        <div class="step"><div class="sn">3</div><div class="sb"><b>取得 API 資訊</b><p><code>Settings → API Keys</code> 複製 URL 和 Publishable key</p></div></div>
-      </div>
-      <button class="sql-btn" onclick="showSql()">📋 查看 SQL 建表指令</button>
-      <div class="fields">
-        <div class="field"><label>Project URL</label><input type="url" id="cfgUrl" placeholder="https://xxxxxxxx.supabase.co"></div>
-        <div class="field"><label>Publishable Key</label><input type="text" id="cfgKey" placeholder="sb_publishable_..."></div>
-      </div>
-      <button class="btn-main" onclick="saveConfig()">下一步 →</button>
-    </div>
-  </div>
-</div>
-
-<!-- ── STEP 2: 登入/註冊 ── -->
-<div class="screen" id="authScreen">
+<!-- ── 登入/註冊 ── -->
+<div class="screen on" id="authScreen">
   <div class="screen-inner">
     <div class="brand">
       <span class="brand-icon">💑</span>
@@ -390,7 +364,6 @@ input,select{font-family:inherit;font-size:15px;color:var(--text)}
         使用 Google 帳號登入
       </button>
       <button class="btn-link" id="authSwitch" onclick="switchAuth(authMode==='login'?'register':'login')">還沒有帳號？點此註冊</button>
-      <button class="btn-link" style="color:var(--text3);font-weight:500;margin-top:4px" onclick="showScreen('cfgScreen')">重新設定資料庫</button>
     </div>
   </div>
 </div>
@@ -611,7 +584,7 @@ CREATE POLICY "own_budget" ON budgets FOR ALL USING (
       </div>
       <div class="set-card">
         <div class="set-row" style="justify-content:center">
-          <button class="danger-btn" onclick="resetAll()">🔄 重新設定</button>
+          <button class="danger-btn" onclick="doLogout()">👋 登出帳號</button>
         </div>
       </div>
       <div style="text-align:center;padding:24px;color:var(--text3);font-size:13px;line-height:2">
@@ -636,7 +609,13 @@ const EMO={飲食:'🍱',交通:'🚗',住房:'🏠',醫療:'💊',娛樂:'🎬'
 const WHO={husband:'👨 先生',wife:'👩 太太',joint:'🤝 共同'};
 const MONTHS=['一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月'];
 
-let cfg=null, session=null, familyId=null, inviteCode=null;
+// ── 固定 Supabase 設定（不需使用者自行設定）──
+const cfg={
+  url:'https://yqqcyyvggzqcxrccugkd.supabase.co',
+  key:'sb_publishable_a9oM6j_gk7hXT4AokY8tWw__-nxwHxJ'
+};
+
+let session=null, familyId=null, inviteCode=null;
 let authMode='login', year, month, txFilter='all';
 let allTx=[], budgets={}, chartInst=null;
 
@@ -731,7 +710,7 @@ async function handleGoogleCallback(){
 
 // ── Init ──
 async function init(){
-  // 強制更新 Service Worker，確保使用最新版本
+  // 強制更新 Service Worker
   if('serviceWorker' in navigator){
     try{
       const regs=await navigator.serviceWorker.getRegistrations();
@@ -739,17 +718,10 @@ async function init(){
     }catch{}
   }
 
-  const hashStr=window.location.hash||'';
-  const queryStr=window.location.search||'';
-  const hasToken=hashStr.includes('access_token')||queryStr.includes('access_token')||queryStr.includes('code=');
-
-  const c=localStorage.getItem('bgt_cfg');
-  if(!c){
-    if(hasToken) window.history.replaceState(null,'',window.location.pathname);
-    showScreen('cfgScreen'); return;
-  }
-  cfg=JSON.parse(c);
+  // 處理 Google OAuth 回調
   if(await handleGoogleCallback()) return;
+
+  // 檢查既有 session
   const s=localStorage.getItem('bgt_session');
   if(s){
     session=JSON.parse(s);
@@ -770,16 +742,6 @@ async function init(){
 function showScreen(id){
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('on'));
   if(id) document.getElementById(id).classList.add('on');
-}
-
-// ── Config ──
-function saveConfig(){
-  const url=document.getElementById('cfgUrl').value.trim().replace(/\/$/,'');
-  const key=document.getElementById('cfgKey').value.trim();
-  if(!url||!key){showToast('請填入 URL 和 Key');return;}
-  cfg={url,key};
-  localStorage.setItem('bgt_cfg',JSON.stringify(cfg));
-  showScreen('authScreen');
 }
 
 // ── Auth ──
@@ -837,12 +799,6 @@ async function doLogout(){
   document.getElementById('app').classList.remove('ready');
   showScreen('authScreen');
   showToast('已登出 👋');
-}
-
-function resetAll(){
-  if(!confirm('確定重新設定？本機記錄將清除'))return;
-  localStorage.clear();
-  location.reload();
 }
 
 // ── Invite ──
@@ -1172,3 +1128,4 @@ init();
 </script>
 </body>
 </html>
+
